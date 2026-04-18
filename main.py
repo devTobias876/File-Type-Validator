@@ -1,96 +1,133 @@
+"""
+File-Type Validator
+
+Author: [TS / devTobias876]
+
+Copyright: (c) 2026
+
+Version: 1.1.0 (external config)
+
+License: MIT
+
+Description: A security-focused offline tool to verify file integrity by
+             comparing file extensions with their actual "Magic Bytes" (headers).
+             Designed for high-security, air-gapped environments where
+             no internet connection is available.
+
+Usage:       Run the script to open the GUI. Select a file to validate.
+             The tool will alert if the file signature does not match the extension.
+"""
+
 import os
+import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+# --- CONFIGURATION ---
+CONFIG_FILE = "signatures.json"
 
-# --- LOGIK-TEIL (BACKEND) ---
+def load_signatures(config_path: str = CONFIG_FILE) -> dict:
+    # Loads signatures from JSON file. Returns empty dict if failed
+    if not os.path.exists(config_path):
+        return {}
 
-def get_file_signature(file_path):
-    """Liest die ersten 4 Bytes einer Datei und gibt sie als Hex-String zurück."""
+    try:
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+            return {item["extension"]: item["magic"] for item in data["signatures"]}
+    except Exception:
+        return {}
+
+def get_file_signature(file_path: str) -> str:
+    # Reads the first 4 bytes of a file and returns them as a Hex string
     try:
         with open(file_path, 'rb') as f:
             header = f.read(4)
             return header.hex().upper()
-    except Exception as e:
-        return None
+    except Exception:
+        return ""
 
+def validate_file(file_path: str) -> tuple:
+    # Checks file content against the signature database
+    signatures = load_signatures()
 
-def validate_file(file_path):
-    """
-    Prüft, ob die Magic Bytes zur Dateiendung passen.
-    Erweiterbar über das Dictionary 'signatures'.
-    """
-    # Datenbank der Magic Bytes (Hex-Repräsentation)
-    # Diese könnte später in eine signatures.json ausgelagert werden
-    signatures = {
-        ".pdf": "25504446",
-        ".png": "89504E47",
-        ".jpg": "FFD8FFE0",
-        ".jpeg": "FFD8FFE0",
-        ".exe": "4D5A",
-        ".zip": "504B0304",
-        ".docx": "504B0304"  # Word nutzt oft das ZIP-Format als Container
-    }
+    if not signatures:
+        return "ERROR", "Signature database not found!", "#dc3545"
 
     _, extension = os.path.splitext(file_path.lower())
     actual_signature = get_file_signature(file_path)
 
-    if actual_signature is None:
-        return "FEHLER", "Datei konnte nicht gelesen werden.", "orange"
+    if not actual_signature:
+        return "ERROR", "File could not be read.", "#dc3545"
 
     if extension not in signatures:
-        return "INFO", f"Endung {extension} unbekannt.\nHeader: {actual_signature}", "gray"
+        return "UNKNOWN", f"Extension {extension} not in database.\nHeader: {actual_signature}", "#6c757d"
 
-    expected_signature = signatures[extension]
+    expected_signature = signatures[extension].upper()
 
-    # Vergleich: Startet der Datei-Header mit der erwarteten Signatur?
     if actual_signature.startswith(expected_signature):
-        return "OK", f"Validierung erfolgreich!\nTyp: {extension}\nHeader: {actual_signature}", "green"
+        return "VALID", f"Match confirmed!\nExtension: {extension}\nHeader: {actual_signature}", "#28a745"
     else:
-        return "ALARM", f"Manipulation? Endung ist {extension},\naber Header ist {actual_signature}!", "red"
+        return "ALARM", f"MISMATCH DETECTED!\nExpected: {expected_signature}\nFound: {actual_signature}", "#dc3545"
 
-
-# --- GUI-TEIL (FRONTEND) ---
+# --- GUI ACTIONS ---
 
 def select_and_check_file():
-    """Wird aufgerufen, wenn der Button geklickt wird."""
-    file_path = filedialog.askopenfilename(title="Datei zur Sicherheitsprüfung auswählen")
+    """Triggered by the selection button."""
+    file_path = filedialog.askopenfilename(title="Select File for Analysis")
 
     if file_path:
         status, message, color = validate_file(file_path)
-
-        # UI-Elemente aktualisieren
         label_status.config(text=status, fg=color)
         label_details.config(text=message)
-        label_path.config(text=f"Datei: {os.path.basename(file_path)}")
+        label_path.config(text=f"File: {os.path.basename(file_path)}")
 
+def perform_startup_check():
+    """Checks if the signature file exists at startup."""
+    if not os.path.exists(CONFIG_FILE):
+        label_status.config(text="DB MISSING", fg="#dc3545")
+        label_details.config(text=f"Critical Error: '{CONFIG_FILE}' not found.\nApplication restricted.", fg="#dc3545")
+        btn_select.config(state="disabled") # Deactivate button
+    else:
+        label_status.config(text="SYSTEM READY", fg="#28a745")
+        label_details.config(text="Database loaded successfully. Please select a file.")
 
-# Hauptfenster Setup
+# --- UI SETUP ---
 root = tk.Tk()
-root.title("Sicherheits-Check: File-Type Validator")
-root.geometry("500x350")
-root.configure(padx=20, pady=20)
+root.title("File-Type Validator v1.2")
+root.geometry("500x400")
+root.configure(padx=25, pady=25)
 
-# UI Komponenten
-title_label = tk.Label(root, text="Air-Gap File Validator", font=("Arial", 16, "bold"))
-title_label.pack(pady=10)
+# Title
+title_label = tk.Label(root, text="File-Type Validator", font=("Arial", 18, "bold"))
+title_label.pack(pady=(0, 20))
 
-btn_select = tk.Button(root, text="Datei auswählen & prüfen", command=select_and_check_file,
-                       font=("Arial", 12), bg="#d1d1d1", padx=10, pady=5)
-btn_select.pack(pady=20)
+# Status Section (Changes dynamically)
+label_status = tk.Label(root, text="INITIALIZING...", font=("Arial", 22, "bold"), fg="#0056b3")
+label_status.pack()
 
-label_path = tk.Label(root, text="Keine Datei ausgewählt", font=("Arial", 10, "italic"))
+label_details = tk.Label(root, text="Running startup diagnostics...",
+                         font=("Arial", 10), justify="center", wraplength=400, pady=10)
+label_details.pack()
+
+# Separator
+tk.Frame(root, height=2, bd=1, relief="sunken").pack(fill="x", pady=15)
+
+# Action Section
+btn_select = tk.Button(root, text="SCAN FILE", command=select_and_check_file,
+                       font=("Arial", 12, "bold"), bg="#007bff", fg="white",
+                       activebackground="#0056b3", padx=30, pady=12, cursor="hand2")
+btn_select.pack(pady=10)
+
+label_path = tk.Label(root, text="Current selection: None", font=("Arial", 9, "italic"), fg="#666")
 label_path.pack()
 
-label_status = tk.Label(root, text="BEREIT", font=("Arial", 20, "bold"), fg="blue")
-label_status.pack(pady=10)
+# Footer
+footer = tk.Label(root, text="Offline Security Environment | v1.2.0", font=("Arial", 8), fg="gray")
+footer.pack(side="bottom", pady=(20, 0))
 
-label_details = tk.Label(root, text="Warten auf Eingabe...", font=("Arial", 10), justify="center")
-label_details.pack(pady=10)
-
-# Fußzeile für professionelles Aussehen
-footer = tk.Label(root, text="Offline Security Tool | v1.0", font=("Arial", 8), fg="gray")
-footer.pack(side="bottom")
+# Run the startup check after the window is initialized
+root.after(500, perform_startup_check)
 
 if __name__ == "__main__":
     root.mainloop()
