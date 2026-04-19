@@ -5,7 +5,7 @@ Author: [TS / devTobias876]
 
 Copyright: (c) 2026
 
-Version: 1.1.0 (external config)
+Version: 1.2.0 (UX Upgrade)
 
 License: MIT
 
@@ -22,6 +22,7 @@ import os
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinterdnd2 import DND_FILES, TkinterDnD
 
 # --- CONFIGURATION ---
 CONFIG_FILE = "signatures.json"
@@ -46,6 +47,30 @@ def get_file_signature(file_path: str) -> str:
             return header.hex().upper()
     except Exception:
         return ""
+
+def handle_drop(event):
+    # Handles the file drop event
+    # Some OS wrap the path in curly braces if it contains spaces
+    file_path = event.data.strip('{}')
+
+    if os.path.isfile(file_path):
+        process_file(file_path)
+
+
+def select_and_check_file():
+    # Triggered by the manual selection button
+    file_path = filedialog.askopenfilename(title="Select File for Analysis")
+    if file_path:
+        process_file(file_path)
+
+
+def process_file(file_path):
+    #  Refactored logic to handle both button and drag-drop
+    status, message, color = validate_file(file_path)
+    label_status.config(text=status, fg=color)
+    label_details.config(text=message)
+    label_path.config(text=f"File: {os.path.basename(file_path)}")
+
 
 def validate_file(file_path: str) -> tuple:
     # Checks file content against the signature database
@@ -72,16 +97,6 @@ def validate_file(file_path: str) -> tuple:
 
 # --- GUI ACTIONS ---
 
-def select_and_check_file():
-    """Triggered by the selection button."""
-    file_path = filedialog.askopenfilename(title="Select File for Analysis")
-
-    if file_path:
-        status, message, color = validate_file(file_path)
-        label_status.config(text=status, fg=color)
-        label_details.config(text=message)
-        label_path.config(text=f"File: {os.path.basename(file_path)}")
-
 def perform_startup_check():
     """Checks if the signature file exists at startup."""
     if not os.path.exists(CONFIG_FILE):
@@ -93,9 +108,9 @@ def perform_startup_check():
         label_details.config(text="Database loaded successfully. Please select a file.")
 
 # --- UI SETUP ---
-root = tk.Tk()
+root = TkinterDnD.Tk()
 root.title("File-Type Validator v1.2")
-root.geometry("500x400")
+root.geometry("500x500")
 root.configure(padx=25, pady=25)
 
 # Title
@@ -109,6 +124,22 @@ label_status.pack()
 label_details = tk.Label(root, text="Running startup diagnostics...",
                          font=("Arial", 10), justify="center", wraplength=400, pady=10)
 label_details.pack()
+
+# Instruction for the user
+drop_label = tk.Label(
+    root,
+    text="--- DROP FILE HERE ---",
+    font=("Arial", 10, "bold"),
+    fg="#666",
+    bg="#eee",
+    pady=30,
+    relief="groove"
+)
+drop_label.pack(fill="x", padx=20, pady=10)
+
+# Register the label as a drop target
+drop_label.drop_target_register(DND_FILES)
+drop_label.dnd_bind('<<Drop>>', handle_drop)
 
 # Separator
 tk.Frame(root, height=2, bd=1, relief="sunken").pack(fill="x", pady=15)
