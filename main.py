@@ -98,7 +98,7 @@ def validate_file(file_path: str) -> tuple:
 # --- GUI ACTIONS ---
 
 def perform_startup_check():
-    """Checks if the signature file exists at startup."""
+    # Checks if the signature file exists at startup
     if not os.path.exists(CONFIG_FILE):
         label_status.config(text="DB MISSING", fg="#dc3545")
         label_details.config(text=f"Critical Error: '{CONFIG_FILE}' not found.\nApplication restricted.", fg="#dc3545")
@@ -112,6 +112,19 @@ root = TkinterDnD.Tk()
 root.title("File-Type Validator v1.2")
 root.geometry("500x500")
 root.configure(padx=25, pady=25)
+
+# Set GUI Icon
+try:
+    # Use .ico file
+    root.iconbitmap("icon.ico")
+except Exception:
+    # Fallback: if .ico fails, try the .png directly
+    try:
+        img = tk.PhotoImage(file='icon.png')
+        root.tk.call('wm', 'icon photo', root._w, img)
+    except Exception:
+        # Ignore if both icons are missing
+        pass
 
 # Title
 title_label = tk.Label(root, text="File-Type Validator", font=("Arial", 18, "bold"))
